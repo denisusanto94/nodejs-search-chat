@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles/bootstrap-custom.css">
+</head>
+<body class="chat2-page">
+    <div class="chat2-shell">
+        <header class="chat2-header">
+            <div class="container chat2-header-inner">
+                <div class="chat2-brand">
+                    <span class="chat2-dot"></span>
+                    <div>
+                        <h1>Search Chat</h1>
+                        <p>Public & private conversations</p>
+                    </div>
+                </div>
+                <div class="chat2-actions">
+                    <span id="chatUserLabel" class="chat2-user">Guest</span>
+                    <button id="loginTrigger" class="chat2-button ghost">Login</button>
+                    <button id="registerTrigger" class="chat2-button ghost">Register</button>
+                    <button id="logoutTrigger" class="chat2-button hidden">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="container chat2-main">
+            <section class="chat2-grid">
+                <div id="publicCard" class="chat2-card">
+                    <div class="chat2-card-header">
+                        <div>
+                            <button id="togglePublicCard" class="chat2-icon-button chevron hidden">‹</button>
+                            <h2>Public Room</h2>
+                            <span>Chat sebagai guest tanpa login.</span>
+                        </div>
+                        <div class="chat2-header-actions">
+                            <span class="chat2-pill public-pill">Public</span>
+                        </div>
+                    </div>
+                    <div id="publicMessages" class="chat2-messages"></div>
+                    <div id="publicTyping" class="chat2-typing hidden"></div>
+                    <div class="chat2-input-area">
+                        <input id="guestName" class="chat2-input" placeholder="Nama guest" />
+                        <input id="publicMessageInput" class="chat2-input" placeholder="Tulis pesan..." />
+                        <button id="sendPublic" class="chat2-button">Send</button>
+                    </div>
+                </div>
+
+                <div id="privateCard" class="chat2-card hidden">
+                    <div class="chat2-card-header">
+                        <div>
+                            <h2>Private Chat</h2>
+                            <span>Login untuk DM + AES-256.</span>
+                        </div>
+                        <span class="chat2-pill warning">Encrypted</span>
+                    </div>
+                    <div class="chat2-private-body">
+                        <div class="chat2-users">
+                            <div class="chat2-section-title">Users</div>
+                            <div id="userList" class="chat2-list"></div>
+                            <!-- Rooms list hidden per request -->
+                        </div>
+                        <div class="chat2-thread">
+                            <div id="privateMessages" class="chat2-messages"></div>
+                            <div id="privateTyping" class="chat2-typing hidden"></div>
+                            <div class="chat2-input-area">
+                                <div class="chat2-input-row">
+                                    <div class="chat2-input-wrap">
+                                        <input id="privateMessageInput" class="chat2-input" placeholder="Tulis pesan privat..." disabled />
+                                        <button id="attachPrivate" class="chat2-icon-button inside" disabled>+</button>
+                                        <button id="emojiPrivate" class="chat2-icon-button inside" disabled>&#128512;</button>
+                                        <input id="privateFileInput" type="file" class="hidden" />
+                                    </div>
+                                    <button id="sendPrivate" class="chat2-button" disabled>Send</button>
+                                </div>
+                                <div id="privateAttachmentPreview" class="chat2-attachment-preview hidden"></div>
+                                <div id="emojiPanel" class="chat2-emoji-panel hidden">
+                                    <button data-emoji="&#128512;">&#128512;</button>
+                                    <button data-emoji="&#128514;">&#128514;</button>
+                                    <button data-emoji="&#128525;">&#128525;</button>
+                                    <button data-emoji="&#128526;">&#128526;</button>
+                                    <button data-emoji="&#128557;">&#128557;</button>
+                                    <button data-emoji="&#128077;">&#128077;</button>
+                                    <button data-emoji="&#128591;">&#128591;</button>
+                                    <button data-emoji="&#128293;">&#128293;</button>
+                                    <button data-emoji="&#127881;">&#127881;</button>
+                                    <button data-emoji="&#9989;">&#9989;</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="loginModal" class="chat2-modal hidden">
+        <div class="chat2-modal-card">
+            <h2>Login</h2>
+            <form id="loginForm" class="chat2-form">
+                <input id="loginUsername" placeholder="Username" required />
+                <input id="loginPassword" type="password" placeholder="Password" required />
+                <button type="submit" class="chat2-button">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="registerModal" class="chat2-modal hidden">
+        <div class="chat2-modal-card">
+            <h2>Register</h2>
+            <form id="registerForm" class="chat2-form">
+                <input id="registerUsername" placeholder="Username" required />
+                <input id="registerPassword" type="password" placeholder="Password" required />
+                <button type="submit" class="chat2-button">Register</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="captchaModal" class="chat2-modal hidden">
+        <div class="chat2-modal-card">
+            <h2>Verifikasi Captcha</h2>
+            <div class="chat2-captcha-modal">
+                <span id="captchaCode" class="chat2-captcha-code">00000</span>
+                <button id="captchaRefresh" class="chat2-icon-button">↻</button>
+            </div>
+            <input id="captchaInput" class="chat2-input" placeholder="Masukkan 5 digit" maxlength="5" />
+            <div class="chat2-modal-actions">
+                <button id="captchaCancel" class="chat2-button ghost" type="button">Batal</button>
+                <button id="captchaConfirm" class="chat2-button" type="button">Kirim</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/chat.js"></script>
+</body>
+</html>

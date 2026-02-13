@@ -1,0 +1,23 @@
+{
+  "users": [
+    {
+      "id": "69eb0d24-d594-47f5-8390-9aac03e26350",
+      "username": "admin",
+      "password": "$2a$10$b0UE0Yw6wrr7oEY7dFbUDuyPITka4LIt/nkYhh8ElvZ0tFUErZ/iC",
+      "createdAt": "2026-02-12T09:51:33.118Z"
+    }
+  ],
+  "rooms": [
+    {
+      "id": "general",
+      "name": "General",
+      "createdAt": "2026-02-12T09:51:14.348Z"
+    },
+    {
+      "id": "random",
+      "name": "Random",
+      "createdAt": "2026-02-12T09:51:14.349Z"
+    }
+  ],
+  "messages": []
+}
