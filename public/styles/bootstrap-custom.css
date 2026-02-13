@@ -462,12 +462,34 @@ mark {
     --search-card: #ffffff;
     --search-border: rgba(31, 41, 51, 0.12);
     --search-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+    --search-bg-blur: 0px;
+    --search-bg-blur-scrolled: 9px;
 }
 
 .search-page {
     background: var(--search-canvas);
     color: var(--search-ink);
     font-family: "Space Grotesk", "Segoe UI", sans-serif;
+    min-height: 100vh;
+    position: relative;
+}
+
+.search-page::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: url("../images/bg-search.jpg");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: blur(var(--search-bg-blur));
+    transform: scale(1.05);
+    transition: filter 0.35s ease;
+    z-index: -2;
+}
+
+.search-page.is-scrolled::before {
+    filter: blur(var(--search-bg-blur-scrolled));
 }
 
 .search-page h1,

@@ -360,3 +360,15 @@ async function displayResults(data, query) {
 
 // Focus on input when page loads
 document.getElementById('searchInput').focus();
+
+const searchPage = document.body;
+const updateScrollBlur = () => {
+    if (window.scrollY > 10) {
+        searchPage.classList.add('is-scrolled');
+    } else {
+        searchPage.classList.remove('is-scrolled');
+    }
+};
+
+updateScrollBlur();
+window.addEventListener('scroll', updateScrollBlur, { passive: true });
