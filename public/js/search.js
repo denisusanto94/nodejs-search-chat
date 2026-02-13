@@ -68,14 +68,25 @@ function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function tokenizeQuery(query) {
+    return query
+        .trim()
+        .split(/[^a-zA-Z0-9\u00C0-\u00FF]+/)
+        .filter(Boolean);
+}
+
 function highlightQuery(text, query) {
     if (!text || !query) {
         return text || '';
     }
-    const pattern = escapeRegExp(query.trim());
-    if (!pattern) {
+    const tokens = tokenizeQuery(query);
+    if (tokens.length === 0) {
         return text;
     }
+    const pattern = tokens
+        .map((token) => escapeRegExp(token))
+        .sort((a, b) => b.length - a.length)
+        .join('|');
     const regex = new RegExp(`(${pattern})`, 'gi');
     return text.replace(regex, '<mark>$1</mark>');
 }
