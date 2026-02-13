@@ -484,7 +484,7 @@ mark {
     background-repeat: no-repeat;
     filter: blur(var(--search-bg-blur));
     transform: scale(1.05);
-    transition: filter 0.35s ease;
+    transition: filter 0.6s ease;
     z-index: -2;
 }
 
@@ -579,6 +579,10 @@ mark {
     padding: 2.5rem 0 4rem;
     position: relative;
     z-index: 1;
+    min-height: calc(100vh - 140px);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.9s ease;
 }
 
 .hero-card {
@@ -589,6 +593,9 @@ mark {
     padding: 2.5rem;
     display: grid;
     gap: 1.5rem;
+    margin-top: auto;
+    margin-bottom: auto;
+    transition: margin 0.9s ease, transform 0.9s ease;
 }
 
 .hero-copy {
@@ -653,7 +660,7 @@ mark {
     color: #ffffff;
     background: linear-gradient(135deg, var(--search-accent), var(--search-accent-strong));
     box-shadow: 0 10px 20px rgba(15, 118, 110, 0.25);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.35s ease, box-shadow 0.35s ease;
 }
 
 .search-button:hover {
@@ -677,12 +684,22 @@ mark {
 }
 
 .results-card {
-    margin-top: 2rem;
+    margin-top: 1rem;
     background: var(--search-card);
     border-radius: 1.25rem;
     border: 1px solid var(--search-border);
     box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
     overflow: hidden;
+}
+
+.search-page.has-results .hero-card {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    transform: translateY(-12px);
+}
+
+.search-page.has-results .search-main {
+    transform: translateY(-24px);
 }
 
 .results-header {
@@ -726,7 +743,7 @@ mark {
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.35s ease, box-shadow 0.35s ease;
 }
 
 .result-card:hover {
@@ -795,7 +812,7 @@ mark {
     font-size: 0.78rem;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
     box-shadow: 0 0 0 rgba(15, 118, 110, 0.2);
 }
 
@@ -814,13 +831,13 @@ mark {
 }
 
 .reveal {
-    animation: fadeUp 0.6s ease forwards;
+    animation: fadeUp 0.9s ease forwards;
 }
 
 @keyframes fadeUp {
     from {
         opacity: 0;
-        transform: translateY(12px);
+        transform: translateY(16px);
     }
     to {
         opacity: 1;

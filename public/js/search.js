@@ -296,6 +296,7 @@ function damerauLevenshtein(a, b) {
 
 async function displayResults(data, query) {
     const resultsList = resultsListEl;
+    document.body.classList.add('has-results');
     
     if (!data.data || data.data.length === 0) {
         let emptyHtml = `
