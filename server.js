@@ -641,6 +641,14 @@ app.get('/api/rooms/:roomId/messages', authenticateToken, async (req, res) => {
             .filter((id) => id !== req.user.userId);
 
         const mapped = messages.map((message) => {
+            if (message.subtype === 'system') {
+                return {
+                    id: message._id.toString(),
+                    content: message.content || '',
+                    createdAt: message.createdAt,
+                    system: true
+                };
+            }
             const payload = message.encrypted ? decryptPayload(message.encrypted) : { content: '' };
             const own = isOwnMessage(message, req.user);
             const readBy = Array.isArray(message.readBy) ? message.readBy : [];
@@ -981,6 +989,101 @@ wss.on('connection', (ws) => {
             } catch (error) {
                 return;
             }
+        }
+
+        const forwardVideoCallToOther = async (payload) => {
+            if (!meta.user || !payload.roomId) return;
+            try {
+                const db = await getDb();
+                const room = await db.collection('rooms').findOne({ _id: new ObjectId(payload.roomId) });
+                if (!room || room.type !== 'private') return;
+                const isMember = room.members.some((m) => m.userId === meta.user.userId);
+                if (!isMember) return;
+                const otherIds = room.members.map((m) => m.userId).filter((id) => id !== meta.user.userId);
+                if (otherIds.length > 0) {
+                    broadcastPrivate(otherIds, payload);
+                }
+            } catch (err) {
+                // ignore
+            }
+        };
+
+        const emitVideoCallSystemMessage = async (roomId, content) => {
+            try {
+                const db = await getDb();
+                const room = await db.collection('rooms').findOne({ _id: new ObjectId(roomId) });
+                if (!room || room.type !== 'private') return;
+                const messages = db.collection('messages');
+                const result = await messages.insertOne({
+                    roomId,
+                    type: 'private',
+                    subtype: 'system',
+                    content: String(content),
+                    createdAt: new Date().toISOString()
+                });
+                const memberIds = room.members.map((m) => m.userId);
+                broadcastPrivate(memberIds, {
+                    type: 'video_call_system_message',
+                    roomId,
+                    message: {
+                        id: result.insertedId.toString(),
+                        content: String(content),
+                        createdAt: new Date().toISOString()
+                    }
+                });
+            } catch (err) {
+                // ignore
+            }
+        };
+
+        if (type === 'video_call_offer') {
+            const fromName = meta.user.displayName || meta.user.username;
+            await forwardVideoCallToOther({
+                type: 'video_call_offer',
+                roomId: payload.roomId,
+                offer: payload.offer,
+                fromUserId: meta.user.userId,
+                fromUsername: fromName
+            });
+            await emitVideoCallSystemMessage(payload.roomId, `${fromName} memulai panggilan video`);
+            return;
+        }
+        if (type === 'video_call_answer') {
+            await forwardVideoCallToOther({
+                type: 'video_call_answer',
+                roomId: payload.roomId,
+                answer: payload.answer,
+                fromUserId: meta.user.userId
+            });
+            await emitVideoCallSystemMessage(payload.roomId, 'Panggilan video diterima');
+            return;
+        }
+        if (type === 'video_call_ice') {
+            await forwardVideoCallToOther({
+                type: 'video_call_ice',
+                roomId: payload.roomId,
+                candidate: payload.candidate,
+                fromUserId: meta.user.userId
+            });
+            return;
+        }
+        if (type === 'video_call_end') {
+            await forwardVideoCallToOther({
+                type: 'video_call_end',
+                roomId: payload.roomId,
+                fromUserId: meta.user.userId
+            });
+            await emitVideoCallSystemMessage(payload.roomId, 'Panggilan video berakhir');
+            return;
+        }
+        if (type === 'video_call_decline') {
+            await forwardVideoCallToOther({
+                type: 'video_call_decline',
+                roomId: payload.roomId,
+                fromUserId: meta.user.userId
+            });
+            await emitVideoCallSystemMessage(payload.roomId, 'Panggilan video ditolak');
+            return;
         }
 
         if (type === 'typing') {

@@ -72,8 +72,9 @@
                                 <div class="chat2-input-row">
                                     <div class="chat2-input-wrap">
                                         <input id="privateMessageInput" class="chat2-input" placeholder="Tulis pesan privat..." disabled />
-                                        <button id="attachPrivate" class="chat2-icon-button inside" disabled title="Lampirkan file">&#128206;</button>
-                                        <button id="emojiPrivate" class="chat2-icon-button inside" disabled>&#128512;</button>
+                                        <button id="videoCallPrivate" class="chat2-icon-button inside" disabled title="Video call"><img src="/images/video-call-64.png" alt="Video call" class="chat2-icon-img" /></button>
+                                        <button id="attachPrivate" class="chat2-icon-button inside" disabled title="Lampirkan file"><img src="/images/attachment-64.png" alt="Lampirkan" class="chat2-icon-img" /></button>
+                                        <button id="emojiPrivate" class="chat2-icon-button inside" disabled><span class="chat2-icon-emoji">&#128512;</span></button>
                                         <input id="privateFileInput" type="file" class="hidden" />
                                     </div>
                                     <button id="sendPrivate" class="chat2-button" disabled>Send</button>
@@ -133,6 +134,42 @@
             <div class="chat2-modal-actions">
                 <button id="captchaCancel" class="chat2-button ghost" type="button">Batal</button>
                 <button id="captchaConfirm" class="chat2-button" type="button">Kirim</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="incomingVideoCallModal" class="chat2-modal hidden">
+        <div class="chat2-modal-card chat2-incoming-call-card">
+            <div class="chat2-incoming-call-icon">&#128249;</div>
+            <h2 class="chat2-incoming-call-title">Panggilan video masuk</h2>
+            <p id="incomingVideoCallFrom" class="chat2-incoming-call-from">Memanggil...</p>
+            <div class="chat2-incoming-call-actions">
+                <button id="incomingVideoCallDecline" class="chat2-button ghost" type="button">Tolak</button>
+                <button id="incomingVideoCallAccept" class="chat2-button" type="button">Terima</button>
+            </div>
+        </div>
+    </div>
+    <audio id="videoCallRingtone" loop>
+        <source src="/music/incomming-video-call.mp3" type="audio/mpeg" />
+    </audio>
+    <audio id="videoCallRejectSound">
+        <source src="/music/reject-video-call.mp3" type="audio/mpeg" />
+    </audio>
+
+    <div id="videoCallModal" class="chat2-modal chat2-videocall-modal hidden">
+        <div class="chat2-videocall-card">
+            <div class="chat2-videocall-header">
+                <span id="videoCallStatus">Memanggil...</span>
+                <button id="videoCallEnd" class="chat2-button" type="button">Akhiri panggilan</button>
+            </div>
+            <div class="chat2-videocall-videos">
+                <div class="chat2-videocall-remote">
+                    <video id="videoCallRemote" autoplay playsinline></video>
+                    <div id="videoCallRemotePlaceholder" class="chat2-videocall-placeholder">Menunggu...</div>
+                </div>
+                <div class="chat2-videocall-local">
+                    <video id="videoCallLocal" autoplay playsinline muted></video>
+                </div>
             </div>
         </div>
     </div>

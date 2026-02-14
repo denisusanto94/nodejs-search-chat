@@ -17,8 +17,16 @@ const state = {
         id: null,
         code: null
     },
-    publicPending: null
+    publicPending: null,
+    videoCall: {
+        peerConnection: null,
+        localStream: null,
+        isInitiator: false
+    },
+    pendingVideoCallOffer: null
 };
+
+const PC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
 let toastTimeout = null;
 const TOAST_DURATION_MS = 4000;
@@ -201,56 +209,46 @@ const setUserLabel = (name) => {
     document.getElementById('chatUserLabel').textContent = name || 'Guest';
 };
 
-const renderMessages = (container, messages, options = {}) => {
+const renderMessageRow = (msg, options = {}) => {
     const showStatus = options.showStatus || false;
     const isPrivate = options.showStatus || false;
-    container.innerHTML = messages.map((msg) => {
+    if (msg.system) {
         const time = new Date(msg.createdAt).toLocaleTimeString();
-        const initials = initialsFromName(msg.username);
-        const isOwn = state.user && (msg.username === (state.user.displayName || state.user.username));
-        const status = showStatus && isOwn && msg.status ? `<div class="chat2-message-status">${msg.status === 'read' ? 'Read' : 'Send'}</div>` : '';
-        return `
-            <div class="chat2-message ${isOwn ? 'is-own' : ''}">
-                <div class="chat2-avatar">${initials}</div>
-                <div class="chat2-message-content">
-                    <div class="chat2-message-meta">
-                        <span>${msg.username}</span>
-                        <span>${time}</span>
-                    </div>
-                    <div class="chat2-message-body">${msg.content}</div>
-                    ${renderAttachment(msg.attachment, { isPrivate })}
-                    ${status}
+        return `<div class="chat2-message chat2-message-system">
+            <div class="chat2-message-system-content">${msg.content}</div>
+            <div class="chat2-message-system-time">${time}</div>
+        </div>`;
+    }
+    const time = new Date(msg.createdAt).toLocaleTimeString();
+    const initials = initialsFromName(msg.username);
+    const isOwn = state.user && (msg.username === (state.user.displayName || state.user.username));
+    const status = showStatus && isOwn && msg.status ? `<div class="chat2-message-status">${msg.status === 'read' ? 'Read' : 'Send'}</div>` : '';
+    return `
+        <div class="chat2-message ${isOwn ? 'is-own' : ''}">
+            <div class="chat2-avatar">${initials}</div>
+            <div class="chat2-message-content">
+                <div class="chat2-message-meta">
+                    <span>${msg.username}</span>
+                    <span>${time}</span>
                 </div>
+                <div class="chat2-message-body">${msg.content}</div>
+                ${renderAttachment(msg.attachment || null, { isPrivate })}
+                ${status}
             </div>
-        `;
-    }).join('');
+        </div>
+    `;
+};
+
+const renderMessages = (container, messages, options = {}) => {
+    const isPrivate = options.showStatus || false;
+    container.innerHTML = messages.map((msg) => renderMessageRow(msg, options)).join('');
     container.scrollTop = container.scrollHeight;
     if (isPrivate) loadPrivateAttachments(container);
 };
 
 const appendMessages = (container, messages, options = {}) => {
-    const showStatus = options.showStatus || false;
     const isPrivate = options.showStatus || false;
-    const html = messages.map((msg) => {
-        const time = new Date(msg.createdAt).toLocaleTimeString();
-        const initials = initialsFromName(msg.username);
-        const isOwn = state.user && (msg.username === (state.user.displayName || state.user.username));
-        const status = showStatus && isOwn && msg.status ? `<div class="chat2-message-status">${msg.status === 'read' ? 'Read' : 'Send'}</div>` : '';
-        return `
-            <div class="chat2-message ${isOwn ? 'is-own' : ''}">
-                <div class="chat2-avatar">${initials}</div>
-                <div class="chat2-message-content">
-                    <div class="chat2-message-meta">
-                        <span>${msg.username}</span>
-                        <span>${time}</span>
-                    </div>
-                    <div class="chat2-message-body">${msg.content}</div>
-                    ${renderAttachment(msg.attachment, { isPrivate })}
-                    ${status}
-                </div>
-            </div>
-        `;
-    }).join('');
+    const html = messages.map((msg) => renderMessageRow(msg, options)).join('');
     container.insertAdjacentHTML('beforeend', html);
     container.scrollTop = container.scrollHeight;
     if (isPrivate) loadPrivateAttachments(container);
@@ -321,8 +319,193 @@ const updatePrivateInputAreaState = () => {
     if (area) area.classList.toggle('is-disabled', disabled);
     document.getElementById('privateMessageInput').disabled = disabled;
     document.getElementById('sendPrivate').disabled = disabled;
+    document.getElementById('videoCallPrivate').disabled = disabled;
     document.getElementById('attachPrivate').disabled = disabled;
     document.getElementById('emojiPrivate').disabled = disabled;
+};
+
+const getVideoCallModal = () => ({
+    modal: document.getElementById('videoCallModal'),
+    status: document.getElementById('videoCallStatus'),
+    localVideo: document.getElementById('videoCallLocal'),
+    remoteVideo: document.getElementById('videoCallRemote'),
+    remotePlaceholder: document.getElementById('videoCallRemotePlaceholder')
+});
+
+const endVideoCall = (sendSignal = true) => {
+    const { modal, localVideo, remoteVideo, remotePlaceholder } = getVideoCallModal();
+    if (state.videoCall.peerConnection) {
+        state.videoCall.peerConnection.close();
+        state.videoCall.peerConnection = null;
+    }
+    if (state.videoCall.localStream) {
+        state.videoCall.localStream.getTracks().forEach((t) => t.stop());
+        state.videoCall.localStream = null;
+    }
+    if (localVideo) localVideo.srcObject = null;
+    if (remoteVideo) remoteVideo.srcObject = null;
+    if (remotePlaceholder) {
+        remotePlaceholder.classList.remove('hidden');
+        remotePlaceholder.textContent = 'Menunggu...';
+    }
+    if (modal) modal.classList.add('hidden');
+    if (sendSignal && state.privateRoomId && state.ws && state.ws.readyState === WebSocket.OPEN) {
+        sendWs({ type: 'video_call_end', roomId: state.privateRoomId });
+    }
+};
+
+const startVideoCall = async () => {
+    if (!state.privateRoomId || !state.user || !state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+    const { modal, status, localVideo, remoteVideo, remotePlaceholder } = getVideoCallModal();
+    if (!modal || !localVideo || !remoteVideo) return;
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        state.videoCall.localStream = stream;
+        state.videoCall.isInitiator = true;
+        localVideo.srcObject = stream;
+
+        const pc = new RTCPeerConnection(PC_CONFIG);
+        state.videoCall.peerConnection = pc;
+
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+        pc.ontrack = (e) => {
+            if (remoteVideo && e.streams && e.streams[0]) {
+                remoteVideo.srcObject = e.streams[0];
+                if (remotePlaceholder) remotePlaceholder.classList.add('hidden');
+            }
+        };
+        pc.onicecandidate = (e) => {
+            if (e.candidate && state.ws && state.ws.readyState === WebSocket.OPEN) {
+                sendWs({ type: 'video_call_ice', roomId: state.privateRoomId, candidate: e.candidate });
+            }
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        sendWs({ type: 'video_call_offer', roomId: state.privateRoomId, offer });
+
+        if (status) status.textContent = 'Memanggil...';
+        if (remotePlaceholder) remotePlaceholder.textContent = 'Menunggu jawaban...';
+        modal.classList.remove('hidden');
+    } catch (err) {
+        showToast(err.message || 'Tidak dapat mengakses kamera/mikrofon');
+    }
+};
+
+const getIncomingCallModal = () => ({
+    modal: document.getElementById('incomingVideoCallModal'),
+    fromEl: document.getElementById('incomingVideoCallFrom'),
+    ringtone: document.getElementById('videoCallRingtone')
+});
+
+const stopIncomingRingtone = () => {
+    const ringtone = getIncomingCallModal().ringtone;
+    if (ringtone) {
+        ringtone.pause();
+        ringtone.currentTime = 0;
+    }
+};
+
+const showIncomingVideoCall = (payload) => {
+    if (state.videoCall.peerConnection) return;
+    state.pendingVideoCallOffer = payload;
+    const { modal, fromEl } = getIncomingCallModal();
+    if (fromEl) fromEl.textContent = payload.fromUsername ? `Dari: ${payload.fromUsername}` : 'Panggilan video masuk';
+    if (modal) modal.classList.remove('hidden');
+    const ringtone = getIncomingCallModal().ringtone;
+    if (ringtone) {
+        ringtone.currentTime = 0;
+        ringtone.play().catch(() => {});
+    }
+};
+
+const hideIncomingVideoCall = () => {
+    state.pendingVideoCallOffer = null;
+    stopIncomingRingtone();
+    const modal = getIncomingCallModal().modal;
+    if (modal) modal.classList.add('hidden');
+};
+
+const acceptIncomingVideoCall = async () => {
+    const payload = state.pendingVideoCallOffer;
+    if (!payload) return;
+    hideIncomingVideoCall();
+    await handleVideoCallOffer(payload);
+};
+
+const declineIncomingVideoCall = () => {
+    const rejectSound = document.getElementById('videoCallRejectSound');
+    if (rejectSound) {
+        rejectSound.currentTime = 0;
+        rejectSound.play().catch(() => {});
+    }
+    if (state.privateRoomId && state.ws && state.ws.readyState === WebSocket.OPEN) {
+        sendWs({ type: 'video_call_decline', roomId: state.privateRoomId });
+    }
+    hideIncomingVideoCall();
+};
+
+const handleVideoCallOffer = async (payload) => {
+    if (!state.privateRoomId || state.privateRoomId !== payload.roomId || !state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+    const { modal, status, localVideo, remoteVideo, remotePlaceholder } = getVideoCallModal();
+    if (!modal || !localVideo || !remoteVideo) return;
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        state.videoCall.localStream = stream;
+        state.videoCall.isInitiator = false;
+        localVideo.srcObject = stream;
+
+        const pc = new RTCPeerConnection(PC_CONFIG);
+        state.videoCall.peerConnection = pc;
+
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+        pc.ontrack = (e) => {
+            if (remoteVideo && e.streams && e.streams[0]) {
+                remoteVideo.srcObject = e.streams[0];
+                if (remotePlaceholder) remotePlaceholder.classList.add('hidden');
+            }
+        };
+        pc.onicecandidate = (e) => {
+            if (e.candidate && state.ws && state.ws.readyState === WebSocket.OPEN) {
+                sendWs({ type: 'video_call_ice', roomId: state.privateRoomId, candidate: e.candidate });
+            }
+        };
+
+        await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        sendWs({ type: 'video_call_answer', roomId: state.privateRoomId, answer });
+
+        if (status) status.textContent = `Panggilan dengan ${payload.fromUsername || 'pengguna'}`;
+        if (remotePlaceholder) remotePlaceholder.textContent = 'Menghubungkan...';
+        modal.classList.remove('hidden');
+    } catch (err) {
+        showToast(err.message || 'Tidak dapat mengakses kamera/mikrofon');
+    }
+};
+
+const handleVideoCallAnswer = async (payload) => {
+    if (!state.videoCall.peerConnection || payload.roomId !== state.privateRoomId) return;
+    try {
+        await state.videoCall.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.answer));
+        const el = getVideoCallModal().status;
+        if (el) el.textContent = 'Terhubung';
+    } catch (err) {
+        endVideoCall();
+    }
+};
+
+const handleVideoCallIce = async (payload) => {
+    if (!state.videoCall.peerConnection || payload.roomId !== state.privateRoomId) return;
+    try {
+        await state.videoCall.peerConnection.addIceCandidate(new RTCIceCandidate(payload.candidate));
+    } catch (err) {
+        // ignore
+    }
 };
 
 const setAuthState = (user) => {
@@ -583,6 +766,10 @@ const attachEvents = () => {
         }
     });
 
+    document.getElementById('videoCallPrivate').addEventListener('click', () => startVideoCall());
+    document.getElementById('videoCallEnd').addEventListener('click', () => endVideoCall());
+    document.getElementById('incomingVideoCallAccept').addEventListener('click', () => acceptIncomingVideoCall());
+    document.getElementById('incomingVideoCallDecline').addEventListener('click', () => declineIncomingVideoCall());
     document.getElementById('sendPrivate').addEventListener('click', () => sendPrivateMessage());
     document.getElementById('attachPrivate').addEventListener('click', () => {
         document.getElementById('privateFileInput').click();
@@ -634,6 +821,8 @@ const attachEvents = () => {
         document.getElementById('togglePublicCard').classList.toggle('is-expanded', grid.classList.contains('is-public-narrow'));
     });
     document.getElementById('logoutTrigger').addEventListener('click', () => {
+        hideIncomingVideoCall();
+        endVideoCall(false);
         state.token = null;
         state.user = null;
         state.activeUser = null;
@@ -642,7 +831,6 @@ const attachEvents = () => {
         setAuthState(null);
         document.getElementById('privateMessages').innerHTML = '';
         document.getElementById('userList').innerHTML = '';
-        // private rooms list hidden
         state.pendingFile = null;
         setAttachmentPreview({ attachment: null, file: null });
     });
@@ -749,6 +937,42 @@ const connectWs = () => {
             statuses.forEach((node) => {
                 node.textContent = 'Read';
             });
+            return;
+        }
+
+        if (payload.type === 'video_call_offer') {
+            showIncomingVideoCall(payload);
+            return;
+        }
+        if (payload.type === 'video_call_answer') {
+            handleVideoCallAnswer(payload);
+            return;
+        }
+        if (payload.type === 'video_call_ice') {
+            handleVideoCallIce(payload);
+            return;
+        }
+        if (payload.type === 'video_call_end') {
+            if (state.pendingVideoCallOffer) {
+                hideIncomingVideoCall();
+            } else {
+                endVideoCall(false);
+            }
+            return;
+        }
+        if (payload.type === 'video_call_decline') {
+            endVideoCall(false);
+            showToast('Panggilan ditolak');
+            return;
+        }
+
+        if (payload.type === 'video_call_system_message') {
+            if (payload.roomId === state.privateRoomId && payload.message) {
+                const container = document.getElementById('privateMessages');
+                if (container) {
+                    appendMessages(container, [{ ...payload.message, system: true }], { showStatus: true });
+                }
+            }
             return;
         }
 
