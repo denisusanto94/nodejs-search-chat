@@ -1,3 +1,4 @@
+require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
@@ -25,9 +26,13 @@ const MONGO_URL = `mongodb://${MONGO_HOST}:${MONGO_PORT}`;
 
 const aesKey = crypto.createHash('sha256').update(AES_SECRET, 'utf8').digest();
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const UPLOAD_PRIVATE_DIR = path.join(__dirname, 'private_uploads');
 
 if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(UPLOAD_PRIVATE_DIR)) {
+    fs.mkdirSync(UPLOAD_PRIVATE_DIR, { recursive: true });
 }
 
 let mongoClient;
@@ -45,6 +50,7 @@ const getDb = async () => {
     await mongoDb.collection('users').createIndex({ username: 1 }, { unique: true });
     await mongoDb.collection('rooms').createIndex({ type: 1, 'members.userId': 1 });
     await mongoDb.collection('messages').createIndex({ roomId: 1, createdAt: 1 });
+    await mongoDb.collection('encrypted_files').createIndex({ _id: 1 });
 
     return mongoDb;
 };
@@ -101,6 +107,20 @@ const decryptPayload = (payload) => {
         // Fall through to raw content.
     }
     return { content: text };
+};
+
+const encryptFileBuffer = (buffer) => {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', aesKey, iv);
+    const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return { iv, tag, encrypted };
+};
+
+const decryptFileBuffer = (encrypted, iv, tag) => {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', aesKey, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
 };
 
 const isOwnMessage = (message, user) => {
@@ -261,9 +281,45 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/api/upload', authenticateToken, upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'File required' });
+    }
+
+    const forPrivate = req.body.forPrivate === '1' || req.body.forPrivate === true;
+
+    if (forPrivate) {
+        try {
+            const fileId = crypto.randomBytes(12).toString('hex');
+            const rawBuffer = fs.readFileSync(req.file.path);
+            const { iv, tag, encrypted } = encryptFileBuffer(rawBuffer);
+            const encPath = path.join(UPLOAD_PRIVATE_DIR, `${fileId}.enc`);
+            fs.writeFileSync(encPath, encrypted);
+            fs.unlinkSync(req.file.path);
+
+            const db = await getDb();
+            const col = db.collection('encrypted_files');
+            await col.insertOne({
+                _id: fileId,
+                iv: iv.toString('base64'),
+                tag: tag.toString('base64'),
+                originalName: req.file.originalname,
+                mimetype: req.file.mimetype || 'application/octet-stream',
+                size: req.file.size,
+                uploadedBy: req.user.userId,
+                allowedRooms: []
+            });
+
+            return res.json({
+                url: `/api/private-file/${fileId}`,
+                name: req.file.originalname,
+                type: req.file.mimetype,
+                size: req.file.size
+            });
+        } catch (err) {
+            if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+            return res.status(500).json({ error: 'Upload failed' });
+        }
     }
 
     return res.json({
@@ -272,6 +328,48 @@ app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => 
         type: req.file.mimetype,
         size: req.file.size
     });
+});
+
+app.get('/api/private-file/:fileId', authenticateToken, async (req, res) => {
+    try {
+        const { fileId } = req.params;
+        const db = await getDb();
+        const col = db.collection('encrypted_files');
+        const doc = await col.findOne({ _id: fileId });
+        if (!doc) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+
+        const isUploader = doc.uploadedBy === req.user.userId;
+        const allowedRooms = doc.allowedRooms || [];
+        const roomsCol = db.collection('rooms');
+        let hasAccess = isUploader;
+        if (!hasAccess && allowedRooms.length > 0) {
+            const room = await roomsCol.findOne({
+                _id: { $in: allowedRooms.map((id) => new ObjectId(id)) },
+                'members.userId': req.user.userId
+            });
+            hasAccess = !!room;
+        }
+        if (!hasAccess) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const encPath = path.join(UPLOAD_PRIVATE_DIR, `${fileId}.enc`);
+        if (!fs.existsSync(encPath)) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+        const encrypted = fs.readFileSync(encPath);
+        const iv = Buffer.from(doc.iv, 'base64');
+        const tag = Buffer.from(doc.tag, 'base64');
+        const decrypted = decryptFileBuffer(encrypted, iv, tag);
+
+        res.setHeader('Content-Type', doc.mimetype || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.originalName || 'file')}"`);
+        res.send(decrypted);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to load file' });
+    }
 });
 
 app.post('/api/auth/register', validateBody, async (req, res) => {
@@ -582,9 +680,21 @@ app.post('/api/rooms/:roomId/messages', validateBody, authenticateToken, async (
             return res.status(403).json({ error: 'Forbidden' });
         }
 
+        const roomIdStr = room._id.toString();
+        if (attachment && attachment.url && typeof attachment.url === 'string') {
+            const m = attachment.url.match(/^\/api\/private-file\/([a-f0-9]+)$/);
+            if (m) {
+                const fileId = m[1];
+                await db.collection('encrypted_files').updateOne(
+                    { _id: fileId },
+                    { $addToSet: { allowedRooms: roomIdStr } }
+                );
+            }
+        }
+
         const encrypted = encryptPayload({ content, attachment });
         const payload = {
-            roomId: room._id.toString(),
+            roomId: roomIdStr,
             type: 'private',
             username: req.user.displayName || req.user.username,
             senderId: req.user.userId,
@@ -806,9 +916,20 @@ wss.on('connection', (ws) => {
             const isMember = room.members.some((member) => member.userId === meta.user.userId);
             if (!isMember) return;
 
+            const roomIdStr = room._id.toString();
+            if (attachment && attachment.url && typeof attachment.url === 'string') {
+                const m = attachment.url.match(/^\/api\/private-file\/([a-f0-9]+)$/);
+                if (m) {
+                    await db.collection('encrypted_files').updateOne(
+                        { _id: m[1] },
+                        { $addToSet: { allowedRooms: roomIdStr } }
+                    );
+                }
+            }
+
             const encrypted = encryptPayload({ content, attachment });
             const message = {
-                roomId: room._id.toString(),
+                roomId: roomIdStr,
                 type: 'private',
                 username: meta.user.displayName || meta.user.username,
                 senderId: meta.user.userId,

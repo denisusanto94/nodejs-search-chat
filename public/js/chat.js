@@ -20,6 +20,21 @@ const state = {
     publicPending: null
 };
 
+let toastTimeout = null;
+const TOAST_DURATION_MS = 4000;
+
+const showToast = (message) => {
+    const el = document.getElementById('chatToast');
+    if (!el) return;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    el.textContent = message;
+    el.classList.remove('hidden');
+    toastTimeout = setTimeout(() => {
+        el.classList.add('hidden');
+        toastTimeout = null;
+    }, TOAST_DURATION_MS);
+};
+
 const apiRequest = async (endpoint, options = {}) => {
     const config = {
         headers: {
@@ -53,15 +68,96 @@ const initialsFromName = (name) => {
 };
 
 
-const renderAttachment = (attachment) => {
+const renderAttachment = (attachment, options = {}) => {
     if (!attachment) {
         return '';
+    }
+    const isPrivateFile = options.isPrivate && attachment.url && attachment.url.startsWith('/api/private-file/');
+    if (isPrivateFile) {
+        const name = (attachment.name || 'file').replace(/"/g, '&quot;');
+        const type = (attachment.type || '').replace(/"/g, '&quot;');
+        const url = attachment.url.replace(/"/g, '&quot;');
+        return `<div class="chat2-attachment chat2-attachment-private" data-url="${url}" data-name="${name}" data-type="${type}"><span class="chat2-attachment-loading">Loading...</span></div>`;
     }
     if (attachment.type && attachment.type.startsWith('image/')) {
         return `<div class="chat2-attachment"><img src="${attachment.url}" alt="${attachment.name || 'image'}" /></div>`;
     }
     const label = attachment.name || attachment.url;
     return `<div class="chat2-attachment"><a href="${attachment.url}" target="_blank">${label}</a></div>`;
+};
+
+let imageLightboxEl = null;
+
+const openImageLightbox = (imageUrl) => {
+    if (!imageLightboxEl) {
+        imageLightboxEl = document.createElement('div');
+        imageLightboxEl.className = 'chat2-image-lightbox hidden';
+        imageLightboxEl.innerHTML = '<div class="chat2-image-lightbox-backdrop"><img alt="Perbesar" /></div>';
+        imageLightboxEl.querySelector('.chat2-image-lightbox-backdrop').addEventListener('click', () => {
+            imageLightboxEl.classList.add('hidden');
+        });
+        document.body.appendChild(imageLightboxEl);
+    }
+    const img = imageLightboxEl.querySelector('img');
+    img.src = imageUrl;
+    imageLightboxEl.classList.remove('hidden');
+};
+
+const loadPrivateAttachments = (container) => {
+    if (!container || !state.token) return;
+    const placeholders = container.querySelectorAll('.chat2-attachment-private:not([data-loaded])');
+    placeholders.forEach((el) => {
+        const url = el.getAttribute('data-url');
+        const name = el.getAttribute('data-name') || 'file';
+        const type = el.getAttribute('data-type') || '';
+        if (!url) return;
+        el.setAttribute('data-loaded', '1');
+        fetch(url, {
+            headers: { Authorization: `Bearer ${state.token}` }
+        })
+            .then((res) => {
+                if (!res.ok) throw new Error('Failed to load');
+                return res.blob();
+            })
+            .then((blob) => {
+                const objectUrl = URL.createObjectURL(blob);
+                const isImage = type.startsWith('image/');
+                if (isImage) {
+                    const safeName = name.replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                    const expandSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
+                    const downloadSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>';
+                    el.innerHTML = `
+                        <div class="chat2-attachment-image-wrap">
+                            <img src="${objectUrl}" alt="${safeName}" />
+                            <div class="chat2-attachment-overlay">
+                                <button type="button" class="chat2-attachment-btn chat2-attachment-btn-enlarge" title="Perbesar">${expandSvg}</button>
+                                <button type="button" class="chat2-attachment-btn chat2-attachment-btn-download" title="Download" data-name="${safeName}">${downloadSvg}</button>
+                            </div>
+                        </div>`;
+                    const wrap = el.querySelector('.chat2-attachment-image-wrap');
+                    wrap.querySelector('.chat2-attachment-btn-enlarge').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openImageLightbox(objectUrl);
+                    });
+                    wrap.querySelector('.chat2-attachment-btn-download').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const a = document.createElement('a');
+                        a.href = objectUrl;
+                        a.download = name || 'image';
+                        a.click();
+                    });
+                } else {
+                    el.innerHTML = `<a href="${objectUrl}" download="${name}" target="_blank">${name}</a>`;
+                }
+                el.classList.remove('chat2-attachment-private');
+            })
+            .catch(() => {
+                el.innerHTML = '<span class="chat2-attachment-error">Unable to load file</span>';
+                el.classList.remove('chat2-attachment-private');
+            });
+    });
 };
 
 
@@ -107,6 +203,7 @@ const setUserLabel = (name) => {
 
 const renderMessages = (container, messages, options = {}) => {
     const showStatus = options.showStatus || false;
+    const isPrivate = options.showStatus || false;
     container.innerHTML = messages.map((msg) => {
         const time = new Date(msg.createdAt).toLocaleTimeString();
         const initials = initialsFromName(msg.username);
@@ -121,17 +218,19 @@ const renderMessages = (container, messages, options = {}) => {
                         <span>${time}</span>
                     </div>
                     <div class="chat2-message-body">${msg.content}</div>
-                    ${renderAttachment(msg.attachment)}
+                    ${renderAttachment(msg.attachment, { isPrivate })}
                     ${status}
                 </div>
             </div>
         `;
     }).join('');
     container.scrollTop = container.scrollHeight;
+    if (isPrivate) loadPrivateAttachments(container);
 };
 
 const appendMessages = (container, messages, options = {}) => {
     const showStatus = options.showStatus || false;
+    const isPrivate = options.showStatus || false;
     const html = messages.map((msg) => {
         const time = new Date(msg.createdAt).toLocaleTimeString();
         const initials = initialsFromName(msg.username);
@@ -146,7 +245,7 @@ const appendMessages = (container, messages, options = {}) => {
                         <span>${time}</span>
                     </div>
                     <div class="chat2-message-body">${msg.content}</div>
-                    ${renderAttachment(msg.attachment)}
+                    ${renderAttachment(msg.attachment, { isPrivate })}
                     ${status}
                 </div>
             </div>
@@ -154,6 +253,7 @@ const appendMessages = (container, messages, options = {}) => {
     }).join('');
     container.insertAdjacentHTML('beforeend', html);
     container.scrollTop = container.scrollHeight;
+    if (isPrivate) loadPrivateAttachments(container);
 };
 
 const showPublicNotice = (message) => {
@@ -215,16 +315,23 @@ const hideModals = () => {
     document.getElementById('registerModal').classList.add('hidden');
 };
 
+const updatePrivateInputAreaState = () => {
+    const disabled = !state.user || !state.privateRoomId;
+    const area = document.getElementById('privateInputArea');
+    if (area) area.classList.toggle('is-disabled', disabled);
+    document.getElementById('privateMessageInput').disabled = disabled;
+    document.getElementById('sendPrivate').disabled = disabled;
+    document.getElementById('attachPrivate').disabled = disabled;
+    document.getElementById('emojiPrivate').disabled = disabled;
+};
+
 const setAuthState = (user) => {
     state.user = user;
     setUserLabel(user ? user.displayName : 'Guest');
     document.getElementById('loginTrigger').classList.toggle('hidden', !!user);
     document.getElementById('registerTrigger').classList.toggle('hidden', !!user);
     document.getElementById('logoutTrigger').classList.toggle('hidden', !user);
-    document.getElementById('privateMessageInput').disabled = !user || !state.privateRoomId;
-    document.getElementById('sendPrivate').disabled = !user || !state.privateRoomId;
-    document.getElementById('attachPrivate').disabled = !user;
-    document.getElementById('emojiPrivate').disabled = !user;
+    updatePrivateInputAreaState();
     document.getElementById('privateCard').classList.toggle('hidden', !user);
     document.getElementById('togglePublicCard').classList.toggle('hidden', !user);
     const grid = document.querySelector('.chat2-grid');
@@ -273,12 +380,24 @@ const loadPrivateData = async () => {
     if (!state.token) return;
     const users = await apiRequest('/api/users');
     state.unreadByUser = state.unreadByUser || {};
-    renderUsers(users);
     const rooms = await apiRequest('/api/rooms/private');
-    renderPrivateRooms(rooms);
-    if (!state.privateRoomId && rooms.length > 0) {
+    if (users.length > 0 && !state.privateRoomId) {
+        state.activeUser = users[0].username;
+        const roomWithFirst = rooms.find((r) => r.members && r.members.some((m) => m.username === users[0].username));
+        if (roomWithFirst) {
+            await openPrivateRoom(roomWithFirst.id);
+        } else {
+            await startPrivateRoomWithUser(users[0].username);
+            return;
+        }
+    } else if (!state.privateRoomId && rooms.length > 0) {
         await openPrivateRoom(rooms[0].id);
+        const room = rooms[0];
+        const other = room.members && room.members.find((m) => m.userId !== state.user?.id && m.username);
+        if (other) state.activeUser = other.username;
     }
+    renderUsers(users);
+    renderPrivateRooms(rooms);
 };
 
 const renderUsers = (users) => {
@@ -297,10 +416,7 @@ const openPrivateRoom = async (roomId) => {
     state.privateRoomId = roomId;
     const messages = await apiRequest(`/api/rooms/${roomId}/messages`);
     renderMessages(document.getElementById('privateMessages'), messages, { showStatus: true });
-    document.getElementById('privateMessageInput').disabled = !state.user;
-    document.getElementById('sendPrivate').disabled = !state.user;
-    document.getElementById('attachPrivate').disabled = !state.user;
-    document.getElementById('emojiPrivate').disabled = !state.user;
+    updatePrivateInputAreaState();
     sendWs({ type: 'join_private', roomId });
     renderPrivateRooms(await apiRequest('/api/rooms/private'));
     await markPrivateRead();
@@ -364,9 +480,15 @@ const confirmPublicMessage = async () => {
 };
 
 
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 const uploadPrivateFile = async (file) => {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+        throw new Error('File terlalu besar. Maksimal 10 Mb.');
+    }
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('forPrivate', '1');
     const response = await fetch('/api/upload', {
         method: 'POST',
         headers: {
@@ -389,7 +511,12 @@ const sendPrivateMessage = async (attachment = null) => {
 
     let activeAttachment = attachment;
     if (!activeAttachment && state.pendingFile) {
-        activeAttachment = await uploadPrivateFile(state.pendingFile);
+        try {
+            activeAttachment = await uploadPrivateFile(state.pendingFile);
+        } catch (err) {
+            showToast(err.message || 'Upload gagal');
+            return;
+        }
     }
 
     const sent = sendWs({ type: 'private_message', roomId: state.privateRoomId, content, attachment: activeAttachment });
@@ -463,6 +590,11 @@ const attachEvents = () => {
     document.getElementById('privateFileInput').addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            showToast('File terlalu besar. Maksimal 10 Mb.');
+            e.target.value = '';
+            return;
+        }
         state.pendingFile = file;
         setAttachmentPreview({ file, attachment: null });
         e.target.value = '';

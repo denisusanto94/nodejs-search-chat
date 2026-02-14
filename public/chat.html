@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/styles/bootstrap-custom.css">
 </head>
 <body class="chat2-page">
+    <div id="chatToast" class="chat2-toast hidden" role="alert"></div>
     <div class="chat2-shell">
         <header class="chat2-header">
             <div class="container chat2-header-inner">
@@ -67,16 +68,17 @@
                         <div class="chat2-thread">
                             <div id="privateMessages" class="chat2-messages"></div>
                             <div id="privateTyping" class="chat2-typing hidden"></div>
-                            <div class="chat2-input-area">
+                            <div id="privateInputArea" class="chat2-input-area">
                                 <div class="chat2-input-row">
                                     <div class="chat2-input-wrap">
                                         <input id="privateMessageInput" class="chat2-input" placeholder="Tulis pesan privat..." disabled />
-                                        <button id="attachPrivate" class="chat2-icon-button inside" disabled>+</button>
+                                        <button id="attachPrivate" class="chat2-icon-button inside" disabled title="Lampirkan file">&#128206;</button>
                                         <button id="emojiPrivate" class="chat2-icon-button inside" disabled>&#128512;</button>
                                         <input id="privateFileInput" type="file" class="hidden" />
                                     </div>
                                     <button id="sendPrivate" class="chat2-button" disabled>Send</button>
                                 </div>
+                                <p class="chat2-input-hint">File yang diupload maksimal 10 Mb</p>
                                 <div id="privateAttachmentPreview" class="chat2-attachment-preview hidden"></div>
                                 <div id="emojiPanel" class="chat2-emoji-panel hidden">
                                     <button data-emoji="&#128512;">&#128512;</button>
