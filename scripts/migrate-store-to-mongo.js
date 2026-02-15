@@ -58,6 +58,8 @@ async function run() {
                     username,
                     displayName: (u.username || u.id || '').trim() || username,
                     passwordHash: u.password || u.passwordHash || '',
+                    is_active: u.is_active !== false,
+                    is_pro: u.is_pro === true,
                     createdAt: u.createdAt || new Date().toISOString()
                 };
                 await usersCol.insertOne(doc);

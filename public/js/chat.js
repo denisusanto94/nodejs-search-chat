@@ -21,7 +21,8 @@ const state = {
     videoCall: {
         peerConnection: null,
         localStream: null,
-        isInitiator: false
+        isInitiator: false,
+        limitTimerId: null
     },
     pendingVideoCallOffer: null
 };
@@ -209,6 +210,26 @@ const setUserLabel = (name) => {
     document.getElementById('chatUserLabel').textContent = name || 'Guest';
 };
 
+const setUserBadge = (user) => {
+    const badge = document.getElementById('chatUserBadge');
+    if (!badge) return;
+    if (!user) {
+        badge.textContent = 'free';
+        badge.className = 'chat2-badge-header chat2-badge-header--free';
+    } else {
+        const isPro = user.is_pro === true;
+        badge.textContent = isPro ? 'pro' : 'free';
+        badge.className = 'chat2-badge-header ' + (isPro ? 'chat2-badge-header--pro' : 'chat2-badge-header--free');
+    }
+};
+
+const setPrivateHintsVisibility = () => {
+    const el = document.getElementById('privateHintsContainer');
+    if (!el) return;
+    const isPro = state.user && state.user.is_pro === true;
+    el.classList.toggle('hidden', !!isPro);
+};
+
 const renderMessageRow = (msg, options = {}) => {
     const showStatus = options.showStatus || false;
     const isPrivate = options.showStatus || false;
@@ -311,6 +332,157 @@ const showRegisterModal = () => {
 const hideModals = () => {
     document.getElementById('loginModal').classList.add('hidden');
     document.getElementById('registerModal').classList.add('hidden');
+    document.getElementById('adminPanelModal').classList.add('hidden');
+};
+
+const showAdminPanel = () => {
+    if (!isAdmin()) return;
+    document.getElementById('adminPanelModal').classList.remove('hidden');
+    const activeTab = document.querySelector('.chat2-admin-menu-item.active');
+    const tab = activeTab ? activeTab.getAttribute('data-tab') : 'user-management';
+    switchAdminTab(tab);
+};
+
+const hideAdminPanel = () => {
+    document.getElementById('adminPanelModal').classList.add('hidden');
+};
+
+const switchAdminTab = (tab) => {
+    document.querySelectorAll('.chat2-admin-menu-item').forEach((el) => el.classList.toggle('active', el.getAttribute('data-tab') === tab));
+    document.getElementById('adminTabUserManagement').classList.toggle('hidden', tab !== 'user-management');
+    document.getElementById('adminTabChatManagement').classList.toggle('hidden', tab !== 'chat-management');
+    if (tab === 'user-management') loadAdminUsers();
+    else if (tab === 'chat-management') loadAdminChats();
+};
+
+const loadAdminUsers = async () => {
+    const list = document.getElementById('adminUserList');
+    list.innerHTML = '<div class="chat2-admin-loading">Memuat...</div>';
+    try {
+        const users = await apiRequest('/api/admin/users');
+        renderAdminUserList(users);
+    } catch (e) {
+        list.innerHTML = '<div class="chat2-admin-loading">Gagal memuat: ' + (e.message || 'Error') + '</div>';
+    }
+};
+
+const renderAdminUserList = (users) => {
+    const list = document.getElementById('adminUserList');
+    if (!users.length) {
+        list.innerHTML = '<div class="chat2-admin-empty">Tidak ada user.</div>';
+        return;
+    }
+    list.innerHTML = users.map((u) => `
+        <div class="chat2-admin-user-row" data-user-id="${u.id}">
+            <div class="chat2-admin-user-info">
+                ${(u.displayName || u.username).replace(/</g, '&lt;')}
+                <span> (@${(u.username || '').replace(/</g, '&lt;')})</span>
+            </div>
+            <div class="chat2-admin-user-actions">
+                <div class="chat2-admin-switches">
+                    <div>
+                        <div class="chat2-admin-switch-label">is_active</div>
+                        <div class="chat2-admin-switch ${u.is_active ? 'on' : ''}" data-field="is_active" data-user-id="${u.id}" role="switch" aria-checked="${u.is_active}"></div>
+                    </div>
+                    <div>
+                        <div class="chat2-admin-switch-label">is_pro</div>
+                        <div class="chat2-admin-switch ${u.is_pro ? 'on' : ''}" data-field="is_pro" data-user-id="${u.id}" role="switch" aria-checked="${u.is_pro}"></div>
+                    </div>
+                </div>
+                <button type="button" class="chat2-button chat2-button-small ghost" data-reset-user-id="${u.id}" title="Reset password ke 12345678">Reset password</button>
+            </div>
+        </div>
+    `).join('');
+    list.querySelectorAll('.chat2-admin-switch').forEach((el) => {
+        el.addEventListener('click', async () => {
+            const userId = el.getAttribute('data-user-id');
+            const field = el.getAttribute('data-field');
+            const current = el.classList.contains('on');
+            const value = !current;
+            try {
+                await apiRequest('/api/admin/users/' + userId, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ [field]: value })
+                });
+                el.classList.toggle('on', value);
+                el.setAttribute('aria-checked', value);
+            } catch (err) {
+                showToast(err.message || 'Gagal update');
+            }
+        });
+    });
+    list.querySelectorAll('[data-reset-user-id]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const userId = btn.getAttribute('data-reset-user-id');
+            if (!userId) return;
+            btn.disabled = true;
+            try {
+                await apiRequest('/api/admin/users/' + userId + '/reset-password', { method: 'POST' });
+                showToast('Password direset ke 12345678');
+            } catch (err) {
+                showToast(err.message || 'Gagal reset password');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
+};
+
+const loadAdminChats = async () => {
+    const list = document.getElementById('adminChatList');
+    list.innerHTML = '<div class="chat2-admin-loading">Memuat...</div>';
+    try {
+        const rooms = await apiRequest('/api/admin/chats');
+        renderAdminChatList(rooms);
+    } catch (e) {
+        list.innerHTML = '<div class="chat2-admin-loading">Gagal memuat: ' + (e.message || 'Error') + '</div>';
+    }
+};
+
+const renderAdminChatList = (rooms) => {
+    const list = document.getElementById('adminChatList');
+    if (!rooms.length) {
+        list.innerHTML = '<div class="chat2-admin-empty">Belum ada chat privat.</div>';
+        return;
+    }
+    const membersLabel = (members) => (members || []).map((m) => m.displayName || m.username).join(' ⇄ ');
+    list.innerHTML = rooms.map((room) => {
+        const label = room.name || membersLabel(room.members) || 'Room';
+        const msgs = (room.messages || []).map((m) => {
+            if (m.system) return `<div class="chat2-admin-chat-msg"><span class="time">${(m.createdAt || '').slice(0, 19)}</span> [system] ${(m.content || '').replace(/</g, '&lt;')}</div>`;
+            const time = (m.createdAt || '').slice(0, 19);
+            const content = (m.content || '').replace(/</g, '&lt;');
+            let attHtml = '';
+            if (m.attachment && m.attachment.url) {
+                const url = m.attachment.url.startsWith('http') ? m.attachment.url : (window.location.origin + m.attachment.url);
+                const name = (m.attachment.name || 'download').replace(/"/g, '&quot;');
+                attHtml = ` <a href="#" class="chat2-admin-download-link" data-download-url="${url.replace(/"/g, '&quot;')}" data-download-name="${name}">Download lampiran</a>`;
+            }
+            return `<div class="chat2-admin-chat-msg"><strong>${(m.username || '').replace(/</g, '&lt;')}</strong> <span class="time">${time}</span><br/>${content}${attHtml}</div>`;
+        }).join('');
+        return `<div class="chat2-admin-chat-group"><div class="chat2-admin-chat-group-title">${(label).replace(/</g, '&lt;')}</div><div class="chat2-admin-chat-messages">${msgs || '<span class="chat2-admin-empty">Tidak ada pesan</span>'}</div></div>`;
+    }).join('');
+    list.querySelectorAll('.chat2-admin-download-link').forEach((a) => {
+        a.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const url = a.getAttribute('data-download-url');
+            const name = a.getAttribute('data-download-name') || 'download';
+            if (!url) return;
+            try {
+                const res = await fetch(url, { headers: state.token ? { Authorization: `Bearer ${state.token}` } : {} });
+                if (!res.ok) throw new Error('Gagal mengunduh');
+                const blob = await res.blob();
+                const objUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objUrl;
+                link.download = name;
+                link.click();
+                URL.revokeObjectURL(objUrl);
+            } catch (err) {
+                showToast(err.message || 'Gagal mengunduh');
+            }
+        });
+    });
 };
 
 const updatePrivateInputAreaState = () => {
@@ -333,6 +505,10 @@ const getVideoCallModal = () => ({
 });
 
 const endVideoCall = (sendSignal = true) => {
+    if (state.videoCall.limitTimerId) {
+        clearTimeout(state.videoCall.limitTimerId);
+        state.videoCall.limitTimerId = null;
+    }
     const { modal, localVideo, remoteVideo, remotePlaceholder } = getVideoCallModal();
     if (state.videoCall.peerConnection) {
         state.videoCall.peerConnection.close();
@@ -494,6 +670,13 @@ const handleVideoCallAnswer = async (payload) => {
         await state.videoCall.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.answer));
         const el = getVideoCallModal().status;
         if (el) el.textContent = 'Terhubung';
+        if (state.videoCall.isInitiator && state.user && state.user.is_pro !== true) {
+            state.videoCall.limitTimerId = setTimeout(() => {
+                state.videoCall.limitTimerId = null;
+                endVideoCall(true);
+                showToast('Waktu panggilan 1 menit telah habis.');
+            }, 60 * 1000);
+        }
     } catch (err) {
         endVideoCall();
     }
@@ -508,12 +691,18 @@ const handleVideoCallIce = async (payload) => {
     }
 };
 
+const isAdmin = () => state.user && state.user.username === 'admin' && state.user.is_pro === true;
+
 const setAuthState = (user) => {
     state.user = user;
     setUserLabel(user ? user.displayName : 'Guest');
+    setUserBadge(user);
+    setPrivateHintsVisibility();
     document.getElementById('loginTrigger').classList.toggle('hidden', !!user);
     document.getElementById('registerTrigger').classList.toggle('hidden', !!user);
     document.getElementById('logoutTrigger').classList.toggle('hidden', !user);
+    const adminBtn = document.getElementById('adminPanelTrigger');
+    if (adminBtn) adminBtn.classList.toggle('hidden', !isAdmin());
     updatePrivateInputAreaState();
     document.getElementById('privateCard').classList.toggle('hidden', !user);
     document.getElementById('togglePublicCard').classList.toggle('hidden', !user);
@@ -663,11 +852,14 @@ const confirmPublicMessage = async () => {
 };
 
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_BYTES_PUBLIC = 10 * 1024 * 1024; // 10 MB (public)
+const getMaxPrivateFileSizeBytes = () => (state.user && state.user.is_pro === true ? Number.MAX_SAFE_INTEGER : 5 * 1024 * 1024);
+const getMaxPrivateFileSizeLabel = () => (state.user && state.user.is_pro === true ? 'tidak terbatas' : '5 Mb');
 
 const uploadPrivateFile = async (file) => {
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-        throw new Error('File terlalu besar. Maksimal 10 Mb.');
+    const maxBytes = getMaxPrivateFileSizeBytes();
+    if (file.size > maxBytes) {
+        throw new Error('File terlalu besar. Maksimal ' + getMaxPrivateFileSizeLabel() + (state.user && state.user.is_pro ? '' : '. Silahkan berlangganan untuk upload yang lebih besar.'));
     }
     const formData = new FormData();
     formData.append('file', file);
@@ -777,8 +969,9 @@ const attachEvents = () => {
     document.getElementById('privateFileInput').addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        if (file.size > MAX_FILE_SIZE_BYTES) {
-            showToast('File terlalu besar. Maksimal 10 Mb.');
+        const maxBytes = getMaxPrivateFileSizeBytes();
+        if (file.size > maxBytes) {
+            showToast('File terlalu besar. Maksimal ' + getMaxPrivateFileSizeLabel() + (state.user && state.user.is_pro ? '.' : '. Silahkan berlangganan untuk upload yang lebih besar.'));
             e.target.value = '';
             return;
         }
@@ -813,6 +1006,14 @@ const attachEvents = () => {
         }
     });
 
+    document.getElementById('adminPanelTrigger').addEventListener('click', showAdminPanel);
+    document.getElementById('adminPanelClose').addEventListener('click', hideAdminPanel);
+    document.getElementById('adminPanelModal').addEventListener('click', (e) => {
+        if (e.target.id === 'adminPanelModal') hideAdminPanel();
+    });
+    document.querySelectorAll('.chat2-admin-menu-item').forEach((el) => {
+        el.addEventListener('click', () => switchAdminTab(el.getAttribute('data-tab')));
+    });
     document.getElementById('loginTrigger').addEventListener('click', showLoginModal);
     document.getElementById('registerTrigger').addEventListener('click', showRegisterModal);
     document.getElementById('togglePublicCard').addEventListener('click', () => {
@@ -821,6 +1022,7 @@ const attachEvents = () => {
         document.getElementById('togglePublicCard').classList.toggle('is-expanded', grid.classList.contains('is-public-narrow'));
     });
     document.getElementById('logoutTrigger').addEventListener('click', () => {
+        hideAdminPanel();
         hideIncomingVideoCall();
         endVideoCall(false);
         state.token = null;

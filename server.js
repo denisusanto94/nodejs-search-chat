@@ -194,6 +194,13 @@ const optionalAuth = (req, res, next) => {
     });
 };
 
+const requireAdmin = (req, res, next) => {
+    if (!req.user || req.user.username !== 'admin' || req.user.is_pro !== true) {
+        return res.status(403).json({ error: 'Admin only' });
+    }
+    next();
+};
+
 const validateBody = (req, res, next) => {
     if (!req.body || typeof req.body !== 'object') {
         return res.status(400).json({ error: 'Invalid payload' });
@@ -278,7 +285,7 @@ const uploadStorage = multer.diskStorage({
 
 const upload = multer({
     storage: uploadStorage,
-    limits: { fileSize: 10 * 1024 * 1024 }
+    limits: { fileSize: 500 * 1024 * 1024 }
 });
 
 app.post('/api/upload', authenticateToken, upload.single('file'), async (req, res) => {
@@ -289,6 +296,11 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
     const forPrivate = req.body.forPrivate === '1' || req.body.forPrivate === true;
 
     if (forPrivate) {
+        const isPro = req.user.is_pro === true;
+        if (!isPro && req.file.size > 5 * 1024 * 1024) {
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ error: 'File maksimal 5 Mb. Silahkan berlangganan untuk upload yang lebih besar.' });
+        }
         try {
             const fileId = crypto.randomBytes(12).toString('hex');
             const rawBuffer = fs.readFileSync(req.file.path);
@@ -340,10 +352,11 @@ app.get('/api/private-file/:fileId', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'File not found' });
         }
 
+        const isAdmin = req.user.username === 'admin' && req.user.is_pro === true;
         const isUploader = doc.uploadedBy === req.user.userId;
         const allowedRooms = doc.allowedRooms || [];
         const roomsCol = db.collection('rooms');
-        let hasAccess = isUploader;
+        let hasAccess = isAdmin || isUploader;
         if (!hasAccess && allowedRooms.length > 0) {
             const room = await roomsCol.findOne({
                 _id: { $in: allowedRooms.map((id) => new ObjectId(id)) },
@@ -391,10 +404,13 @@ app.post('/api/auth/register', validateBody, async (req, res) => {
         }
 
         const passwordHash = await bcrypt.hash(password, 10);
+        const normalizedUsername = normalizeUsername(username);
         const user = {
-            username: normalizeUsername(username),
+            username: normalizedUsername,
             displayName: username,
             passwordHash,
+            is_active: true,
+            is_pro: normalizedUsername === 'admin',
             createdAt: new Date().toISOString()
         };
 
@@ -402,7 +418,9 @@ app.post('/api/auth/register', validateBody, async (req, res) => {
         return res.status(201).json({
             id: result.insertedId.toString(),
             username: user.username,
-            displayName: user.displayName
+            displayName: user.displayName,
+            is_active: user.is_active,
+            is_pro: user.is_pro
         });
     } catch (error) {
         return res.status(500).json({ error: 'Server error' });
@@ -419,20 +437,24 @@ app.post('/api/auth/login', validateBody, async (req, res) => {
         if (!user) {
             return res.status(400).json({ error: 'Invalid credentials' });
         }
+        const isActive = user.is_active !== false;
+        if (!isActive) {
+            return res.status(403).json({ error: 'Akun tidak aktif' });
+        }
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) {
             return res.status(400).json({ error: 'Invalid credentials' });
         }
 
         const token = jwt.sign(
-            { userId: user._id.toString(), username: user.username, displayName: user.displayName },
+            { userId: user._id.toString(), username: user.username, displayName: user.displayName, is_active: isActive, is_pro: user.is_pro === true },
             JWT_SECRET,
             { expiresIn: '24h' }
         );
 
         return res.json({
             token,
-            user: { id: user._id.toString(), username: user.username, displayName: user.displayName }
+            user: { id: user._id.toString(), username: user.username, displayName: user.displayName, is_active: isActive, is_pro: user.is_pro === true }
         });
     } catch (error) {
         return res.status(500).json({ error: 'Server error' });
@@ -443,7 +465,9 @@ app.get('/api/users/me', authenticateToken, (req, res) => {
     return res.json({
         id: req.user.userId,
         username: req.user.username,
-        displayName: req.user.displayName
+        displayName: req.user.displayName,
+        is_active: req.user.is_active !== false,
+        is_pro: req.user.is_pro === true
     });
 });
 
@@ -453,12 +477,14 @@ app.get('/api/users', authenticateToken, async (req, res) => {
         const users = await db
             .collection('users')
             .find({ _id: { $ne: new ObjectId(req.user.userId) } })
-            .project({ username: 1, displayName: 1 })
+            .project({ username: 1, displayName: 1, is_active: 1, is_pro: 1 })
             .toArray();
         return res.json(users.map((user) => ({
             id: user._id.toString(),
             username: user.username,
-            displayName: user.displayName
+            displayName: user.displayName,
+            is_active: user.is_active !== false,
+            is_pro: user.is_pro === true
         })));
     } catch (error) {
         return res.status(500).json({ error: 'Server error' });
@@ -713,6 +739,114 @@ app.post('/api/rooms/:roomId/messages', validateBody, authenticateToken, async (
 
         const result = await db.collection('messages').insertOne(payload);
         return res.status(201).json({ id: result.insertedId.toString() });
+    } catch (error) {
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Admin routes (admin only: username === 'admin' && is_pro)
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const db = await getDb();
+        const users = await db
+            .collection('users')
+            .find({})
+            .project({ username: 1, displayName: 1, is_active: 1, is_pro: 1 })
+            .toArray();
+        return res.json(users.map((u) => ({
+            id: u._id.toString(),
+            username: u.username,
+            displayName: u.displayName,
+            is_active: u.is_active !== false,
+            is_pro: u.is_pro === true
+        })));
+    } catch (error) {
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.patch('/api/admin/users/:id', authenticateToken, requireAdmin, validateBody, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        if (!userId) return res.status(400).json({ error: 'User ID required' });
+        const updates = {};
+        if (typeof req.body.is_active === 'boolean') updates.is_active = req.body.is_active;
+        if (typeof req.body.is_pro === 'boolean') updates.is_pro = req.body.is_pro;
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ error: 'Provide is_active and/or is_pro' });
+        }
+        const db = await getDb();
+        const result = await db.collection('users').updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: updates }
+        );
+        if (result.matchedCount === 0) return res.status(404).json({ error: 'User not found' });
+        return res.json({ ok: true });
+    } catch (error) {
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+
+const RESET_PASSWORD_DEFAULT = '12345678';
+
+app.post('/api/admin/users/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        if (!userId) return res.status(400).json({ error: 'User ID required' });
+        const db = await getDb();
+        const passwordHash = await bcrypt.hash(RESET_PASSWORD_DEFAULT, 10);
+        const result = await db.collection('users').updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: { passwordHash } }
+        );
+        if (result.matchedCount === 0) return res.status(404).json({ error: 'User not found' });
+        return res.json({ ok: true });
+    } catch (error) {
+        return res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.get('/api/admin/chats', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const db = await getDb();
+        const rooms = await db
+            .collection('rooms')
+            .find({ type: 'private' })
+            .sort({ createdAt: -1 })
+            .toArray();
+        const roomsWithMessages = [];
+        for (const room of rooms) {
+            const messages = await db
+                .collection('messages')
+                .find({ roomId: room._id.toString(), type: 'private' })
+                .sort({ createdAt: 1 })
+                .limit(500)
+                .toArray();
+            const decrypted = messages.map((m) => {
+                if (m.subtype === 'system') {
+                    return { id: m._id.toString(), content: m.content || '', createdAt: m.createdAt, system: true };
+                }
+                try {
+                    const payload = m.encrypted ? decryptPayload(m.encrypted) : { content: '', attachment: null };
+                    return {
+                        id: m._id.toString(),
+                        username: m.username,
+                        content: payload.content || '',
+                        attachment: payload.attachment || null,
+                        createdAt: m.createdAt
+                    };
+                } catch (e) {
+                    return { id: m._id.toString(), username: m.username, content: '[decrypt error]', createdAt: m.createdAt };
+                }
+            });
+            roomsWithMessages.push({
+                id: room._id.toString(),
+                name: room.name,
+                members: room.members,
+                messages: decrypted
+            });
+        }
+        return res.json(roomsWithMessages);
     } catch (error) {
         return res.status(500).json({ error: 'Server error' });
     }

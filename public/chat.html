@@ -21,7 +21,9 @@
                     </div>
                 </div>
                 <div class="chat2-actions">
+                    <span id="chatUserBadge" class="chat2-badge-header chat2-badge-header--free">free</span>
                     <span id="chatUserLabel" class="chat2-user">Guest</span>
+                    <button id="adminPanelTrigger" class="chat2-button ghost hidden" title="Admin Panel">Admin Panel</button>
                     <button id="loginTrigger" class="chat2-button ghost">Login</button>
                     <button id="registerTrigger" class="chat2-button ghost">Register</button>
                     <button id="logoutTrigger" class="chat2-button hidden">Logout</button>
@@ -79,7 +81,10 @@
                                     </div>
                                     <button id="sendPrivate" class="chat2-button" disabled>Send</button>
                                 </div>
-                                <p class="chat2-input-hint">File yang diupload maksimal 10 Mb</p>
+                                <div id="privateHintsContainer" class="chat2-private-hints">
+                                    <p class="chat2-input-hint">File yang diupload maksimal 5 Mb, silahkan berlangganan untuk upload yang lebih besar.</p>
+                                    <p class="chat2-input-hint">Pemanggilan melalui video call dibatasi sampai 1 menit, silahkan berlangganan untuk melakukan pemanggilan tak terbatas.</p>
+                                </div>
                                 <div id="privateAttachmentPreview" class="chat2-attachment-preview hidden"></div>
                                 <div id="emojiPanel" class="chat2-emoji-panel hidden">
                                     <button data-emoji="&#128512;">&#128512;</button>
@@ -155,6 +160,27 @@
     <audio id="videoCallRejectSound">
         <source src="/music/reject-video-call.mp3" type="audio/mpeg" />
     </audio>
+
+    <div id="adminPanelModal" class="chat2-modal hidden">
+        <div class="chat2-modal-card chat2-admin-panel-card">
+            <div class="chat2-admin-panel-header">
+                <h2>Admin Panel</h2>
+                <button id="adminPanelClose" class="chat2-icon-button" type="button" aria-label="Tutup">×</button>
+            </div>
+            <div class="chat2-admin-panel-menu">
+                <button type="button" class="chat2-admin-menu-item active" data-tab="user-management">User Management</button>
+                <button type="button" class="chat2-admin-menu-item" data-tab="chat-management">Chat Management</button>
+            </div>
+            <div id="adminPanelContent" class="chat2-admin-panel-content">
+                <div id="adminTabUserManagement" class="chat2-admin-tab hidden">
+                    <div id="adminUserList" class="chat2-admin-user-list"></div>
+                </div>
+                <div id="adminTabChatManagement" class="chat2-admin-tab hidden">
+                    <div id="adminChatList" class="chat2-admin-chat-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="videoCallModal" class="chat2-modal chat2-videocall-modal hidden">
         <div class="chat2-videocall-card">
