@@ -333,6 +333,7 @@ const hideModals = () => {
     document.getElementById('loginModal').classList.add('hidden');
     document.getElementById('registerModal').classList.add('hidden');
     document.getElementById('adminPanelModal').classList.add('hidden');
+    document.getElementById('buyProModal').classList.add('hidden');
 };
 
 const showAdminPanel = () => {
@@ -345,6 +346,39 @@ const showAdminPanel = () => {
 
 const hideAdminPanel = () => {
     document.getElementById('adminPanelModal').classList.add('hidden');
+};
+
+const showBuyProModal = () => {
+    if (!state.user || state.user.is_pro === true) return;
+    document.getElementById('buyProError').classList.add('hidden');
+    document.getElementById('buyProModal').classList.remove('hidden');
+};
+
+const hideBuyProModal = () => {
+    document.getElementById('buyProModal').classList.add('hidden');
+};
+
+const handleBuyProPay = async () => {
+    if (!state.user || state.user.is_pro === true) return;
+    const btn = document.getElementById('buyProPayBtn');
+    const errEl = document.getElementById('buyProError');
+    errEl.classList.add('hidden');
+    btn.disabled = true;
+    try {
+        const data = await apiRequest('/api/pro/create-invoice', { method: 'POST' });
+        if (data.invoice_url) {
+            window.open(data.invoice_url, '_blank');
+            hideBuyProModal();
+        } else {
+            errEl.textContent = 'Gagal membuat invoice.';
+            errEl.classList.remove('hidden');
+        }
+    } catch (e) {
+        errEl.textContent = e.message || 'Gagal membuat invoice.';
+        errEl.classList.remove('hidden');
+    } finally {
+        btn.disabled = false;
+    }
 };
 
 const switchAdminTab = (tab) => {
@@ -703,6 +737,8 @@ const setAuthState = (user) => {
     document.getElementById('logoutTrigger').classList.toggle('hidden', !user);
     const adminBtn = document.getElementById('adminPanelTrigger');
     if (adminBtn) adminBtn.classList.toggle('hidden', !isAdmin());
+    const buyProBtn = document.getElementById('buyProTrigger');
+    if (buyProBtn) buyProBtn.classList.toggle('hidden', !user || user.is_pro === true);
     updatePrivateInputAreaState();
     document.getElementById('privateCard').classList.toggle('hidden', !user);
     document.getElementById('togglePublicCard').classList.toggle('hidden', !user);
@@ -1006,6 +1042,12 @@ const attachEvents = () => {
         }
     });
 
+    document.getElementById('buyProTrigger').addEventListener('click', showBuyProModal);
+    document.getElementById('buyProModalClose').addEventListener('click', hideBuyProModal);
+    document.getElementById('buyProModal').addEventListener('click', (e) => {
+        if (e.target.id === 'buyProModal') hideBuyProModal();
+    });
+    document.getElementById('buyProPayBtn').addEventListener('click', handleBuyProPay);
     document.getElementById('adminPanelTrigger').addEventListener('click', showAdminPanel);
     document.getElementById('adminPanelClose').addEventListener('click', hideAdminPanel);
     document.getElementById('adminPanelModal').addEventListener('click', (e) => {

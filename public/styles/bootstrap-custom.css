@@ -1030,6 +1030,62 @@ mark {
     border: 1px solid rgba(15, 118, 110, 0.35);
 }
 
+.chat2-button-buypro {
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    font-size: 0.85rem;
+    padding: 0.4rem 0.85rem;
+}
+
+.chat2-buypro-card {
+    width: min(400px, 95vw);
+}
+.chat2-buypro-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+.chat2-buypro-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+.chat2-buypro-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.chat2-buypro-pricing {
+    background: #f8fafc;
+    padding: 1rem;
+    border-radius: 0.75rem;
+}
+.chat2-buypro-price-line {
+    margin: 0;
+    font-size: 0.95rem;
+}
+.chat2-buypro-price-old {
+    color: #94a3b8;
+    text-decoration: line-through;
+}
+.chat2-buypro-price-promo {
+    color: #0f766e;
+    font-weight: 600;
+    margin-top: 0.35rem;
+}
+.chat2-buypro-gateway {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+.chat2-buypro-pay {
+    width: 100%;
+}
+.chat2-buypro-error {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #dc2626;
+}
+
 .chat2-main {
     padding: 2.5rem 0 3.5rem;
 }

@@ -852,6 +852,80 @@ app.get('/api/admin/chats', authenticateToken, requireAdmin, async (req, res) =>
     }
 });
 
+// Pro subscription: create Xendit invoice
+// Untuk production, set XENDIT_SECRET_KEY di environment; development key dipakai jika env tidak diset
+const XENDIT_SECRET_KEY = process.env.XENDIT_SECRET_KEY || 'xnd_development_UoNPrjwwx5RazzGIWESotS8Mh3Nt67RxnQCWve96iYuYiQJ5LKWwBDn9BHuo4';
+const XENDIT_INVOICE_AMOUNT = 120000; // promo 1 tahun
+const XENDIT_INVOICE_DURATION = 86400; // 24 jam
+
+app.post('/api/pro/create-invoice', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.is_pro === true) {
+            return res.status(400).json({ error: 'Akun sudah Pro' });
+        }
+        if (!XENDIT_SECRET_KEY) {
+            return res.status(503).json({ error: 'Payment gateway belum dikonfigurasi' });
+        }
+        const userId = req.user.userId;
+        const externalId = `pro-${userId}-${Date.now()}`;
+        const auth = Buffer.from(XENDIT_SECRET_KEY + ':').toString('base64');
+        const response = await fetch('https://api.xendit.co/v2/invoices', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Basic ${auth}`
+            },
+            body: JSON.stringify({
+                external_id: externalId,
+                amount: XENDIT_INVOICE_AMOUNT,
+                description: 'Pro 1 Tahun - Promo 50%',
+                invoice_duration: XENDIT_INVOICE_DURATION,
+                currency: 'IDR',
+                customer: {
+                    given_names: req.user.displayName || req.user.username,
+                    email: (req.user.email || `${req.user.username}@pro.user`).toString()
+                }
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return res.status(response.status).json({ error: data.message || data.error_code || 'Gagal membuat invoice' });
+        }
+        const invoiceUrl = data.invoice_url || data.url;
+        if (!invoiceUrl) {
+            return res.status(500).json({ error: 'Invoice URL tidak diterima' });
+        }
+        const db = await getDb();
+        await db.collection('pro_invoices').insertOne({
+            external_id: externalId,
+            userId,
+            amount: XENDIT_INVOICE_AMOUNT,
+            status: data.status || 'PENDING',
+            invoice_id: data.id,
+            createdAt: new Date().toISOString()
+        });
+        return res.json({ invoice_url: invoiceUrl, invoice_id: data.id });
+    } catch (error) {
+        return res.status(500).json({ error: error.message || 'Server error' });
+    }
+});
+
+// Xendit webhook: saat invoice dibayar, set user is_pro = true (atur callback URL di Xendit Dashboard)
+app.post('/api/pro/webhook', (req, res) => {
+    res.status(200).send();
+    const body = req.body;
+    if (!body || body.status !== 'PAID') return;
+    const externalId = body.external_id;
+    if (!externalId || !externalId.startsWith('pro-')) return;
+    const parts = externalId.split('-');
+    if (parts.length < 3) return;
+    const userId = parts[1];
+    getDb()
+        .then((db) => db.collection('users').updateOne({ _id: new ObjectId(userId) }, { $set: { is_pro: true } }))
+        .then(() => {})
+        .catch(() => {});
+});
+
 app.use('/api/*', (req, res) => {
     res.status(404).json({ error: 'API route not found' });
 });

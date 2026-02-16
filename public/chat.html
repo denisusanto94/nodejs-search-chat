@@ -21,6 +21,7 @@
                     </div>
                 </div>
                 <div class="chat2-actions">
+                    <button id="buyProTrigger" class="chat2-button chat2-button-buypro hidden" type="button">Buy Pro</button>
                     <span id="chatUserBadge" class="chat2-badge-header chat2-badge-header--free">free</span>
                     <span id="chatUserLabel" class="chat2-user">Guest</span>
                     <button id="adminPanelTrigger" class="chat2-button ghost hidden" title="Admin Panel">Admin Panel</button>
@@ -160,6 +161,23 @@
     <audio id="videoCallRejectSound">
         <source src="/music/reject-video-call.mp3" type="audio/mpeg" />
     </audio>
+
+    <div id="buyProModal" class="chat2-modal hidden">
+        <div class="chat2-modal-card chat2-buypro-card">
+            <div class="chat2-buypro-header">
+                <h2>Upgrade ke Pro</h2>
+                <button id="buyProModalClose" class="chat2-icon-button" type="button" aria-label="Tutup">×</button>
+            </div>
+            <div class="chat2-buypro-body">
+                <div class="chat2-buypro-pricing">
+                    <p class="chat2-buypro-price-line chat2-buypro-price-old">Harga pro normal: Rp 216.000 <span>(1 Tahun)</span></p>
+                    <p class="chat2-buypro-price-line chat2-buypro-price-promo">Harga pro promo: Rp 120.000 <span>(1 Tahun) diskon 50%</span></p>
+                </div>
+                <button id="buyProPayBtn" class="chat2-button chat2-buypro-pay" type="button">Bayar Rp 120.000</button>
+                <p id="buyProError" class="chat2-buypro-error hidden"></p>
+            </div>
+        </div>
+    </div>
 
     <div id="adminPanelModal" class="chat2-modal hidden">
         <div class="chat2-modal-card chat2-admin-panel-card">
