@@ -16,13 +16,18 @@ const multer = require('multer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-const AES_SECRET = process.env.AES_SECRET || 'change-me-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+const AES_SECRET = process.env.AES_SECRET;
 
 const MONGO_HOST = process.env.MONGO_HOST || 'localhost';
 const MONGO_PORT = process.env.MONGO_PORT || '27017';
 const MONGO_DB = process.env.MONGO_DB || 'search-chat';
 const MONGO_URL = `mongodb://${MONGO_HOST}:${MONGO_PORT}`;
+
+if (!JWT_SECRET || !AES_SECRET) {
+    console.error('Error: Set JWT_SECRET dan AES_SECRET di file .env (lihat .env.example)');
+    process.exit(1);
+}
 
 const aesKey = crypto.createHash('sha256').update(AES_SECRET, 'utf8').digest();
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
@@ -852,11 +857,10 @@ app.get('/api/admin/chats', authenticateToken, requireAdmin, async (req, res) =>
     }
 });
 
-// Pro subscription: create Xendit invoice
-// Untuk production, set XENDIT_SECRET_KEY di environment; development key dipakai jika env tidak diset
-const XENDIT_SECRET_KEY = process.env.XENDIT_SECRET_KEY || 'xnd_development_UoNPrjwwx5RazzGIWESotS8Mh3Nt67RxnQCWve96iYuYiQJ5LKWwBDn9BHuo4';
-const XENDIT_INVOICE_AMOUNT = 120000; // promo 1 tahun
-const XENDIT_INVOICE_DURATION = 86400; // 24 jam
+// Pro subscription: create Xendit invoice (XENDIT_SECRET_KEY dari .env)
+const XENDIT_SECRET_KEY = process.env.XENDIT_SECRET_KEY;
+const XENDIT_INVOICE_AMOUNT = Number(process.env.XENDIT_INVOICE_AMOUNT) || 120000;
+const XENDIT_INVOICE_DURATION = Number(process.env.XENDIT_INVOICE_DURATION) || 86400;
 
 app.post('/api/pro/create-invoice', authenticateToken, async (req, res) => {
     try {
