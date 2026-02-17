@@ -17,19 +17,19 @@
     width: 16rem;
 }
 
-.space-x-4 > * + * {
+.space-x-4>*+* {
     margin-left: 1rem;
 }
 
-.space-y-2 > * + * {
+.space-y-2>*+* {
     margin-top: 0.5rem;
 }
 
-.space-y-3 > * + * {
+.space-y-3>*+* {
     margin-top: 0.75rem;
 }
 
-.space-y-4 > * + * {
+.space-y-4>*+* {
     margin-top: 1rem;
 }
 
@@ -288,6 +288,7 @@
         transform: translateY(-100%);
         opacity: 0;
     }
+
     to {
         transform: translateY(0);
         opacity: 1;
@@ -418,6 +419,7 @@
         opacity: 0;
         transform: translateY(20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -477,7 +479,7 @@ mark {
         padding-left: 1rem;
         padding-right: 1rem;
     }
-    
+
     .message-bubble {
         max-width: 85%;
     }
@@ -871,6 +873,7 @@ mark {
         opacity: 0;
         transform: translateY(16px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -999,10 +1002,12 @@ mark {
     padding: 0.2rem 0.5rem;
     border-radius: 0.4rem;
 }
+
 .chat2-badge-header--pro {
     background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
     color: #fff;
 }
+
 .chat2-badge-header--free {
     background: #e2e8f0;
     color: #64748b;
@@ -1039,47 +1044,57 @@ mark {
 .chat2-buypro-card {
     width: min(400px, 95vw);
 }
+
 .chat2-buypro-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
 }
+
 .chat2-buypro-header h2 {
     margin: 0;
     font-size: 1.25rem;
 }
+
 .chat2-buypro-body {
     display: flex;
     flex-direction: column;
     gap: 1rem;
 }
+
 .chat2-buypro-pricing {
     background: #f8fafc;
     padding: 1rem;
     border-radius: 0.75rem;
 }
+
 .chat2-buypro-price-line {
     margin: 0;
     font-size: 0.95rem;
 }
+
 .chat2-buypro-price-old {
     color: #94a3b8;
     text-decoration: line-through;
 }
+
 .chat2-buypro-price-promo {
     color: #0f766e;
     font-weight: 600;
     margin-top: 0.35rem;
 }
+
 .chat2-buypro-gateway {
     margin: 0;
     font-size: 0.85rem;
     color: #64748b;
 }
+
 .chat2-buypro-pay {
     width: 100%;
 }
+
 .chat2-buypro-error {
     margin: 0;
     font-size: 0.85rem;
@@ -1108,6 +1123,8 @@ mark {
 }
 
 @media (max-width: 900px) {
+
+    .chat2-grid,
     .chat2-grid.is-public-narrow {
         grid-template-columns: 1fr;
     }
@@ -1341,6 +1358,7 @@ mark {
 .chat2-private-hints .chat2-input-hint {
     margin-top: 0.2rem;
 }
+
 .chat2-private-hints .chat2-input-hint:first-child {
     margin-top: 0.35rem;
 }
@@ -1579,6 +1597,7 @@ mark {
 .chat2-attachment-preview.hidden {
     display: none;
 }
+
 .chat2-input {
     width: 100%;
     border-radius: 0.9rem;
@@ -1826,10 +1845,23 @@ mark {
     .chat2-card {
         max-height: calc(100vh - 180px);
     }
+
+    .chat2-icon-button.chevron {
+        transform: rotate(90deg);
+    }
+
+    .chat2-icon-button.chevron.is-expanded {
+        transform: rotate(-90deg);
+    }
+
+    .chat2-grid.is-public-narrow #publicCard {
+        min-height: 0;
+        height: auto;
+    }
 }
 
 
-#togglePublicCard{
+#togglePublicCard {
     margin-top: 10px;
     margin-bottom: 10px;
 }
@@ -1841,22 +1873,26 @@ mark {
     display: flex;
     flex-direction: column;
 }
+
 .chat2-admin-panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
 }
+
 .chat2-admin-panel-header h2 {
     margin: 0;
     font-size: 1.25rem;
 }
+
 .chat2-admin-panel-menu {
     display: flex;
     gap: 0.5rem;
     margin-bottom: 1rem;
     border-bottom: 1px solid rgba(31, 41, 51, 0.12);
 }
+
 .chat2-admin-menu-item {
     padding: 0.5rem 1rem;
     border: none;
@@ -1867,30 +1903,36 @@ mark {
     border-bottom: 2px solid transparent;
     margin-bottom: -1px;
 }
+
 .chat2-admin-menu-item:hover {
     color: #0f172a;
 }
+
 .chat2-admin-menu-item.active {
     color: #0f766e;
     font-weight: 600;
     border-bottom-color: #0f766e;
 }
+
 .chat2-admin-panel-content {
     flex: 1;
     overflow-y: auto;
     min-height: 200px;
 }
+
 .chat2-admin-tab-desc {
     color: #64748b;
     font-size: 0.9rem;
     margin-bottom: 1rem;
 }
+
 .chat2-admin-user-list,
 .chat2-admin-chat-list {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
 }
+
 .chat2-admin-user-row {
     display: flex;
     align-items: center;
@@ -1901,33 +1943,40 @@ mark {
     flex-wrap: wrap;
     gap: 0.75rem;
 }
+
 .chat2-admin-user-info {
     font-weight: 500;
 }
+
 .chat2-admin-user-actions {
     display: flex;
     align-items: center;
     gap: 1rem;
     flex-wrap: wrap;
 }
+
 .chat2-button-small {
     padding: 0.35rem 0.65rem;
     font-size: 0.8rem;
 }
+
 .chat2-admin-user-info span {
     color: #64748b;
     font-weight: 400;
     font-size: 0.85rem;
 }
+
 .chat2-admin-switches {
     display: flex;
     align-items: center;
     gap: 1rem;
 }
+
 .chat2-admin-switch-label {
     font-size: 0.8rem;
     color: #64748b;
 }
+
 .chat2-admin-switch {
     position: relative;
     width: 44px;
@@ -1937,9 +1986,11 @@ mark {
     cursor: pointer;
     transition: background 0.2s;
 }
+
 .chat2-admin-switch.on {
     background: #0f766e;
 }
+
 .chat2-admin-switch::after {
     content: '';
     position: absolute;
@@ -1949,12 +2000,14 @@ mark {
     height: 20px;
     background: #fff;
     border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     transition: transform 0.2s;
 }
+
 .chat2-admin-switch.on::after {
     transform: translateX(20px);
 }
+
 .chat2-admin-chat-room,
 .chat2-admin-chat-group {
     background: #f8fafc;
@@ -1963,6 +2016,7 @@ mark {
     margin-bottom: 1rem;
     border: 1px solid rgba(31, 41, 51, 0.08);
 }
+
 .chat2-admin-chat-group-title {
     font-size: 0.95rem;
     font-weight: 600;
@@ -1971,43 +2025,53 @@ mark {
     padding-bottom: 0.5rem;
     border-bottom: 1px solid rgba(31, 41, 51, 0.12);
 }
+
 .chat2-admin-chat-room h4 {
     font-size: 0.95rem;
     margin: 0 0 0.5rem 0;
     color: #0f172a;
 }
+
 .chat2-admin-chat-messages {
     max-height: 280px;
     overflow-y: auto;
     font-size: 0.9rem;
 }
+
 .chat2-admin-chat-msg {
     padding: 0.4rem 0;
-    border-bottom: 1px solid rgba(0,0,0,0.06);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
+
 .chat2-admin-chat-msg:last-child {
     border-bottom: none;
 }
+
 .chat2-admin-chat-msg strong {
     color: #0f766e;
 }
+
 .chat2-admin-chat-msg .time {
     font-size: 0.75rem;
     color: #94a3b8;
 }
+
 .chat2-admin-download-link {
     color: #0f766e;
     text-decoration: none;
     font-size: 0.85rem;
 }
+
 .chat2-admin-download-link:hover {
     text-decoration: underline;
 }
+
 .chat2-admin-loading {
     color: #64748b;
     text-align: center;
     padding: 1rem;
 }
+
 .chat2-admin-empty {
     color: #94a3b8;
     text-align: center;
